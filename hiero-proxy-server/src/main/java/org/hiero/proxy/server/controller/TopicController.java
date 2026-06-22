@@ -13,16 +13,21 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import org.hiero.base.TopicClient;
 import org.hiero.base.mirrornode.TopicRepository;
 import org.hiero.proxy.server.dto.request.CreatePrivateTopicRequest;
+import org.hiero.proxy.server.dto.request.CreatePrivateTopicWithAdminKeyRequest;
 import org.hiero.proxy.server.dto.request.CreateTopicRequest;
+import org.hiero.proxy.server.dto.request.CreateTopicWithAdminKeyRequest;
 import org.hiero.proxy.server.dto.request.DeleteTopicRequest;
+import org.hiero.proxy.server.dto.request.SubmitBinaryMessageRequest;
 import org.hiero.proxy.server.dto.request.SubmitMessageRequest;
 import org.hiero.proxy.server.dto.request.UpdateTopicKeyRequest;
 import org.hiero.proxy.server.dto.request.UpdateTopicMemoRequest;
+import org.hiero.proxy.server.dto.request.UpdateTopicRequest;
 import org.hiero.proxy.server.dto.response.SuccessResponse;
 import org.hiero.proxy.server.dto.response.TopicCreatedResponse;
 import org.hiero.proxy.server.dto.response.TopicKeyRotationResponse;
 import org.hiero.proxy.server.dto.response.TopicMessageResponse;
 import org.hiero.proxy.server.dto.response.TopicResponse;
+import org.hiero.proxy.server.dto.response.TopicUpdatedResponse;
 import org.hiero.proxy.server.exception.ErrorResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -36,6 +41,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.Base64;
 import java.util.List;
 import java.util.Objects;
 
@@ -129,6 +135,89 @@ public class TopicController {
         TopicId topicId = (request != null && request.memo() != null && !request.memo().isBlank())
                 ? topicClient.createPrivateTopic(newSubmitKey, request.memo())
                 : topicClient.createPrivateTopic(newSubmitKey);
+        return ResponseEntity.status(HttpStatus.CREATED).body(TopicCreatedResponse.of(topicId, newSubmitKey));
+    }
+
+    @PostMapping("/with-admin-key")
+    @Operation(
+            summary = "Create a public topic with a custom admin key",
+            description = "Creates a new public topic on the Hiero network using the provided private key as the admin key. "
+                    + "Use this when you want to control the topic with a key other than the operator key.")
+    @ApiResponses({
+            @ApiResponse(
+                    responseCode = "201",
+                    description = "Topic created successfully.",
+                    content = @Content(
+                            schema = @Schema(implementation = TopicCreatedResponse.class),
+                            examples = @ExampleObject(value = """
+                                    {
+                                      "topicId": "0.0.55003",
+                                      "submitPrivateKey": null,
+                                      "submitPublicKey": null
+                                    }"""))),
+            @ApiResponse(
+                    responseCode = "500",
+                    description = "Topic could not be created on the network.",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    })
+    public ResponseEntity<TopicCreatedResponse> createTopicWithAdminKey(
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                    description = "Custom admin key and optional memo.",
+                    required = true,
+                    content = @Content(
+                            schema = @Schema(implementation = CreateTopicWithAdminKeyRequest.class),
+                            examples = @ExampleObject(value = """
+                                    {
+                                      "adminPrivateKey": "302e020100300506032b657004220420aabbcc...",
+                                      "memo": "Enterprise audit log topic"
+                                    }""")))
+            @RequestBody CreateTopicWithAdminKeyRequest request) throws Exception {
+        PrivateKey adminKey = PrivateKey.fromString(request.adminPrivateKey());
+        TopicId topicId = (request.memo() != null && !request.memo().isBlank())
+                ? topicClient.createTopic(adminKey, request.memo())
+                : topicClient.createTopic(adminKey);
+        return ResponseEntity.status(HttpStatus.CREATED).body(TopicCreatedResponse.of(topicId));
+    }
+
+    @PostMapping("/private/with-admin-key")
+    @Operation(
+            summary = "Create a private topic with a custom admin key",
+            description = "Creates a new private topic using the provided private key as the admin key. "
+                    + "The server generates a fresh ED25519 submit key and returns it in the response — save it securely.")
+    @ApiResponses({
+            @ApiResponse(
+                    responseCode = "201",
+                    description = "Private topic created successfully. The submit key pair is included in the response.",
+                    content = @Content(
+                            schema = @Schema(implementation = TopicCreatedResponse.class),
+                            examples = @ExampleObject(value = """
+                                    {
+                                      "topicId": "0.0.55004",
+                                      "submitPrivateKey": "302e020100300506032b657004220420ddeeff...",
+                                      "submitPublicKey": "302a300506032b6570032100ddeeff..."
+                                    }"""))),
+            @ApiResponse(
+                    responseCode = "500",
+                    description = "Topic could not be created on the network.",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    })
+    public ResponseEntity<TopicCreatedResponse> createPrivateTopicWithAdminKey(
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                    description = "Custom admin key and optional memo. Server generates the submit key.",
+                    required = true,
+                    content = @Content(
+                            schema = @Schema(implementation = CreatePrivateTopicWithAdminKeyRequest.class),
+                            examples = @ExampleObject(value = """
+                                    {
+                                      "adminPrivateKey": "302e020100300506032b657004220420aabbcc...",
+                                      "memo": "Private enterprise channel"
+                                    }""")))
+            @RequestBody CreatePrivateTopicWithAdminKeyRequest request) throws Exception {
+        PrivateKey adminKey = PrivateKey.fromString(request.adminPrivateKey());
+        PrivateKey newSubmitKey = PrivateKey.generateED25519();
+        TopicId topicId = (request.memo() != null && !request.memo().isBlank())
+                ? topicClient.createPrivateTopic(adminKey, newSubmitKey, request.memo())
+                : topicClient.createPrivateTopic(adminKey, newSubmitKey);
         return ResponseEntity.status(HttpStatus.CREATED).body(TopicCreatedResponse.of(topicId, newSubmitKey));
     }
 
@@ -308,6 +397,60 @@ public class TopicController {
         return ResponseEntity.ok(TopicKeyRotationResponse.of(TopicId.fromString(topicId), newKey));
     }
 
+    // Atomic update — admin key, submit key, and memo in a single transaction
+
+    @PutMapping("/{topicId}")
+    @Operation(
+            summary = "Update topic admin key, submit key, and memo",
+            description = "Atomically rotates both the admin key and the submit key of the specified topic "
+                    + "and updates the memo, all in a single network transaction. "
+                    + "Both new key pairs are generated server-side and returned — save them securely.")
+    @ApiResponses({
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "Topic updated successfully. Returns both new key pairs.",
+                    content = @Content(
+                            schema = @Schema(implementation = TopicUpdatedResponse.class),
+                            examples = @ExampleObject(value = """
+                                    {
+                                      "topicId": "0.0.55002",
+                                      "newAdminPrivateKey": "302e020100300506032b657004220420aabbcc...",
+                                      "newAdminPublicKey": "302a300506032b6570032100aabbcc...",
+                                      "newSubmitPrivateKey": "302e020100300506032b657004220420ddeeff...",
+                                      "newSubmitPublicKey": "302a300506032b6570032100ddeeff...",
+                                      "memo": "Updated enterprise event bus"
+                                    }"""))),
+            @ApiResponse(
+                    responseCode = "500",
+                    description = "Topic could not be updated.",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    })
+    public ResponseEntity<TopicUpdatedResponse> updateTopic(
+            @Parameter(description = "The Hiero topic ID.", required = true, example = "0.0.55002")
+            @PathVariable("topicId") String topicId,
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                    description = "Current admin key and new memo. Fresh admin and submit key pairs are generated server-side.",
+                    required = true,
+                    content = @Content(
+                            schema = @Schema(implementation = UpdateTopicRequest.class),
+                            examples = @ExampleObject(value = """
+                                    {
+                                      "currentAdminPrivateKey": "302e020100300506032b657004220420aabbcc...",
+                                      "memo": "Updated enterprise event bus"
+                                    }""")))
+            @RequestBody UpdateTopicRequest request) throws Exception {
+        PrivateKey currentAdminKey = PrivateKey.fromString(request.currentAdminPrivateKey());
+        PrivateKey newAdminKey = PrivateKey.generateED25519();
+        PrivateKey newSubmitKey = PrivateKey.generateED25519();
+        topicClient.updateTopic(
+                TopicId.fromString(topicId),
+                currentAdminKey,
+                newAdminKey,
+                newSubmitKey,
+                request.memo());
+        return ResponseEntity.ok(TopicUpdatedResponse.of(TopicId.fromString(topicId), newAdminKey, newSubmitKey, request.memo()));
+    }
+
     // Topic deletion
 
     @DeleteMapping("/{topicId}")
@@ -391,6 +534,62 @@ public class TopicController {
                     request.message());
         }
         return ResponseEntity.ok(SuccessResponse.of("Message submitted to topic " + topicId + " successfully."));
+    }
+
+    @PostMapping("/{topicId}/messages/binary")
+    @Operation(
+            summary = "Submit a binary message to a topic",
+            description = "Submits a binary message to the specified topic. "
+                    + "The message must be provided as a Base64-encoded string. "
+                    + "Use this for structured binary payloads such as serialised Protobuf. "
+                    + "For private topics, provide the submit private key in the request body.")
+    @ApiResponses({
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "Binary message submitted successfully.",
+                    content = @Content(
+                            schema = @Schema(implementation = SuccessResponse.class),
+                            examples = @ExampleObject(value = """
+                                    { "message": "Binary message submitted to topic 0.0.55001 successfully." }"""))),
+            @ApiResponse(
+                    responseCode = "400",
+                    description = "The provided messageBase64 is not valid Base64.",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(
+                    responseCode = "500",
+                    description = "Binary message could not be submitted.",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    })
+    public ResponseEntity<SuccessResponse> submitBinaryMessage(
+            @Parameter(description = "The Hiero topic ID.", required = true, example = "0.0.55001")
+            @PathVariable("topicId") String topicId,
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                    description = "Base64-encoded binary message and optional submit key for private topics.",
+                    required = true,
+                    content = @Content(
+                            schema = @Schema(implementation = SubmitBinaryMessageRequest.class),
+                            examples = @ExampleObject(value = """
+                                    {
+                                      "messageBase64": "SGVsbG8sIEhpZXJvIG5ldHdvcmsh",
+                                      "submitKey": null
+                                    }""")))
+            @RequestBody SubmitBinaryMessageRequest request) throws Exception {
+        byte[] messageBytes;
+        try {
+            messageBytes = Base64.getDecoder().decode(request.messageBase64());
+        } catch (IllegalArgumentException e) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    HttpStatus.BAD_REQUEST, "messageBase64 is not valid Base64: " + e.getMessage());
+        }
+        if (request.submitKey() == null || request.submitKey().isBlank()) {
+            topicClient.submitMessage(TopicId.fromString(topicId), messageBytes);
+        } else {
+            topicClient.submitMessage(
+                    TopicId.fromString(topicId),
+                    PrivateKey.fromString(request.submitKey()),
+                    messageBytes);
+        }
+        return ResponseEntity.ok(SuccessResponse.of("Binary message submitted to topic " + topicId + " successfully."));
     }
 
     // Message queries
