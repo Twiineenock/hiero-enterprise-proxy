@@ -24,6 +24,7 @@ import org.hiero.proxy.server.dto.response.TokenCreatedResponse;
 import org.hiero.proxy.server.dto.response.TokenInfoResponse;
 import org.hiero.proxy.server.dto.response.TokenSupplyResponse;
 import org.hiero.proxy.server.dto.response.TokenBalanceResponse;
+import org.hiero.proxy.server.dto.response.TokenResponse;
 import org.hiero.proxy.server.exception.ErrorResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -36,7 +37,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.List;
 import java.util.Objects;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/v1/tokens")
@@ -215,6 +218,60 @@ public class FungibleTokenController {
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND,
                         "Balance not found for token: " + tokenId + " and account: " + accountId));
+    }
+
+    @GetMapping("/{tokenId}/balances")
+    @Operation(
+            summary = "Get all token balances",
+            description = "Fetches a list of balances for all accounts that hold the specified token from the Hiero mirror node.")
+    @ApiResponses({
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "Token balances retrieved successfully.",
+                    content = @Content(
+                            schema = @Schema(implementation = TokenBalanceResponse.class, type = "array"))),
+            @ApiResponse(
+                    responseCode = "500",
+                    description = "Could not retrieve balance info.",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    })
+    public ResponseEntity<List<TokenBalanceResponse>> getTokenBalances(
+            @Parameter(description = "The Hedera token ID.", required = true, example = "0.0.55001")
+            @PathVariable("tokenId") String tokenId) throws Exception {
+        return ResponseEntity.ok(
+                tokenRepository.getBalances(tokenId)
+                        .getData()
+                        .stream()
+                        .map(TokenBalanceResponse::from)
+                        .collect(Collectors.toList())
+        );
+    }
+
+    @GetMapping("/account/{accountId}")
+    @Operation(
+            summary = "Get tokens by account",
+            description = "Fetches a list of tokens associated with the specified account from the Hiero mirror node.")
+    @ApiResponses({
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "Tokens retrieved successfully.",
+                    content = @Content(
+                            schema = @Schema(implementation = TokenResponse.class, type = "array"))),
+            @ApiResponse(
+                    responseCode = "500",
+                    description = "Could not retrieve token info.",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    })
+    public ResponseEntity<List<TokenResponse>> getAccountTokens(
+            @Parameter(description = "The Hedera account ID.", required = true, example = "0.0.12345")
+            @PathVariable("accountId") String accountId) throws Exception {
+        return ResponseEntity.ok(
+                tokenRepository.findByAccount(accountId)
+                        .getData()
+                        .stream()
+                        .map(TokenResponse::from)
+                        .collect(Collectors.toList())
+        );
     }
 
     // ─── Associate / Dissociate ───────────────────────────────────────────────
