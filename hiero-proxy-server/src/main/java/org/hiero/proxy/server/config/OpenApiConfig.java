@@ -20,7 +20,13 @@ public class OpenApiConfig {
 
     private static final List<String> TAG_ORDER = List.of(
             "Accounts",
-            "Topics"
+            "Topics",
+            "Fungible Tokens",
+            "NFTs",
+            "Network",
+            "Blocks",
+            "Transactions",
+            "Files"
     );
 
     /**
@@ -49,7 +55,11 @@ public class OpenApiConfig {
             "/api/v1/topics/{topicId}/memo",
             "/api/v1/topics/{topicId}/admin-key",
             "/api/v1/topics/{topicId}/submit-key",
-            "/api/v1/topics/{topicId}"
+            "/api/v1/topics/{topicId}",
+            "/api/v1/files",
+            "/api/v1/files/{fileId}",
+            "/api/v1/files/{fileId}/contents",
+            "/api/v1/files/{fileId}/expiration"
     );
 
     @Bean
