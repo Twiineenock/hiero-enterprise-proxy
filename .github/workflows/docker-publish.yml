@@ -1,0 +1,81 @@
+name: Build & Publish Docker Image
+
+# ── Triggers ──────────────────────────────────────────────────────────────────
+on:
+  push:
+    branches:
+      - main          # publish :latest on every merge to main
+    tags:
+      - "v*.*.*"      # publish a versioned tag on every semver release (v1.2.3)
+  pull_request:
+    branches:
+      - main          # build-only (no push) on PRs to catch Dockerfile regressions
+
+# ── Permissions ───────────────────────────────────────────────────────────────
+# ghcr.io publishing requires write access to packages.
+permissions:
+  contents: read
+  packages: write
+
+# ── Jobs ──────────────────────────────────────────────────────────────────────
+jobs:
+  build-and-push:
+    name: Build & Push
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Check out the source
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # 2. Set up QEMU for multi-platform builds (linux/amd64 + linux/arm64)
+      #    arm64 lets Apple Silicon and AWS Graviton users pull a native image.
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      # 3. Set up Buildx (required for multi-platform and cache support)
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # 4. Log in to GitHub Container Registry
+      #    GITHUB_TOKEN is provided automatically — no secret setup needed.
+      - name: Log in to GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # 5. Derive image tags from the Git ref:
+      #    • push to main     → ghcr.io/hiero-hackers/hiero-enterprise-proxy:latest
+      #    • push tag v1.2.3  → :v1.2.3  AND  :1.2  AND  :1  AND  :latest
+      #    • pull request     → build only, no tag / no push
+      - name: Extract metadata (tags & labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/hiero-hackers/hiero-enterprise-proxy
+          tags: |
+            # semver release tags  (v1.2.3 → :v1.2.3, :1.2, :1)
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            # always tag :latest on main
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+            # tag the short SHA on every push for auditability
+            type=sha,prefix=sha-,format=short
+
+      # 6. Build (and push when not a PR)
+      #    The Maven dependency layer is cached in the GitHub Actions cache so
+      #    subsequent builds that change only Java source skip the ~10-min download.
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

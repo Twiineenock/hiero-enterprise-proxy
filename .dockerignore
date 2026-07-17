@@ -1,0 +1,31 @@
+# Build output — Docker builds from source, not from pre-built JARs
+**/target/
+
+# Version control
+.git/
+.gitignore
+.gitmodules
+
+# IDE and editor files
+.idea/
+.vscode/
+*.code-workspace
+.kiro/
+
+# Secrets — never bake credentials into the image
+.env
+.env.*
+
+# Local Maven repo seed (if generated locally — not needed when using Maven Central)
+.m2-local/
+
+# OS noise
+.DS_Store
+Thumbs.db
+
+# Logs
+**/*.log
+logs/
+
+# Documentation (not needed in the image)
+README.md
