@@ -16,6 +16,9 @@ target/
 .env
 .env.*
 
+# Local Maven repo seed for Docker builds (generated — do not commit)
+.m2-local/
+
 # Logs
 logs/
 *.log

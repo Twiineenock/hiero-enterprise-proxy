@@ -1,0 +1,27 @@
+services:
+  hiero-proxy:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: hiero/enterprise-proxy:latest
+    container_name: hiero-enterprise-proxy
+    ports:
+      - "8080:8080"
+    environment:
+      # ── Required ──────────────────────────────────────────────────────────
+      # Your Hedera operator account ID (e.g. 0.0.12345)
+      HEDERA_ACCOUNT_ID: ${HEDERA_ACCOUNT_ID}
+      # Your Hedera operator private key (DER-encoded hex)
+      HEDERA_PRIVATE_KEY: ${HEDERA_PRIVATE_KEY}
+      # Network: hedera-testnet | hedera-mainnet | hedera-previewnet
+      HEDERA_NETWORK: ${HEDERA_NETWORK:-hedera-testnet}
+    # Graceful shutdown
+    stop_grace_period: 30s
+    # Restart unless explicitly stopped
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/swagger-ui/index.html > /dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s

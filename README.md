@@ -1,120 +1,90 @@
 # Hiero Enterprise Proxy
 
-A Spring Boot REST proxy server that exposes the [hiero-enterprise-java](https://github.com/hiero-ledger/hiero-enterprise-java) SDK as a documented HTTP API. It provides a Swagger UI for all Hiero network operations without requiring direct SDK integration in client applications.
+A production-ready REST gateway to the [Hiero](https://hiero.org) distributed ledger network. It wraps the [hiero-enterprise-java](https://github.com/hiero-hackers/hiero-enterprise-java) SDK and exposes everything as a standard HTTP API — so you can build on Hiero from **any language**, without touching Java or the SDK.
 
-## Features
+## Why this exists
 
-- Full **Account** management — create, query, update, delete, transfer HBAR
-- Full **Topic (HCS)** management — create public/private topics, submit messages, query topic info and message history
-- Interactive **Swagger UI** at `http://localhost:8080/swagger-ui/index.html`
-- Structured error responses following RFC 7807
-- No Git submodules — all dependencies are resolved from Maven Central
+The Hiero SDK is Java-first. If you're building in Python, JavaScript, Go, or anything else, you previously had no clean way to interact with the network. This proxy solves that: run one container, get a fully documented REST API, and start making HTTP requests.
 
-## Prerequisites
+## Quickstart
 
-- Java 21
-- A funded [Hedera testnet account](https://portal.hedera.com)
+You need a funded [Hedera testnet account](https://portal.hedera.com) and Docker.
 
-## Getting Started
-
-### 1. Configure environment
-
-Create a `.env` file in the project root:
-
-```env
-HEDERA_ACCOUNT_ID=0.0.xxxxx
-HEDERA_PRIVATE_KEY=your_operator_private_key
-HEDERA_NETWORK=hedera-testnet
-```
-
-### 2. Run the server
-
-**Linux / macOS:**
 ```bash
-./mvnw spring-boot:run -pl hiero-proxy-server
+docker run \
+  -e HEDERA_ACCOUNT_ID=0.0.xxxxx \
+  -e HEDERA_PRIVATE_KEY=your_private_key \
+  -e HEDERA_NETWORK=hedera-testnet \
+  -p 8080:8080 \
+  ghcr.io/hiero-hackers/hiero-enterprise-proxy:latest
 ```
 
-**Windows:**
-```powershell
-.\mvnw.cmd spring-boot:run -pl hiero-proxy-server
+Open `http://localhost:8080` — you'll find the landing page, interactive API explorer, and OpenAPI spec.
+
+## Running locally with docker compose
+
+```bash
+cp .env.example .env   # add your Hedera credentials
+docker compose up
 ```
 
-The server starts on port `8080`. Open `http://localhost:8080/swagger-ui/index.html` to explore all endpoints interactively.
+Or build and run without Docker if you have Java 21:
 
-## API Reference
+```bash
+./mvnw spring-boot:run -pl hiero-proxy-server   # Linux / macOS
+.\mvnw.cmd spring-boot:run -pl hiero-proxy-server  # Windows
+```
 
-### Accounts — `/api/v1/accounts`
+## Configuration
 
-| Method | Path | Description |
-|--------|------|-------------|
-| `POST` | `/api/v1/accounts` | Create a new account (optional initial HBAR balance) |
-| `GET` | `/api/v1/accounts/{accountId}/balance` | Get account HBAR balance |
-| `GET` | `/api/v1/accounts/operator/balance` | Get operator HBAR balance |
-| `GET` | `/api/v1/accounts/{accountId}/info` | Get detailed account info from mirror node |
-| `PUT` | `/api/v1/accounts/{accountId}/key` | Rotate account key pair (server generates new key) |
-| `PUT` | `/api/v1/accounts/{accountId}/memo` | Update account memo |
-| `PUT` | `/api/v1/accounts/{accountId}` | Atomic key rotation + memo update |
-| `POST` | `/api/v1/accounts/transfer` | Transfer HBAR from operator to an account |
-| `POST` | `/api/v1/accounts/{accountId}/transfer` | Transfer HBAR between user accounts |
-| `DELETE` | `/api/v1/accounts/{accountId}` | Delete account — balance transfers to operator |
-| `DELETE` | `/api/v1/accounts/{accountId}/to/{recipientAccountId}` | Delete account — balance transfers to recipient |
+All configuration is done through environment variables (or a `.env` file in the project root):
 
-### Topics — `/api/v1/topics`
+| Variable | Required | Description |
+|---|---|---|
+| `HEDERA_ACCOUNT_ID` | ✅ | Your operator account (e.g. `0.0.12345`) |
+| `HEDERA_PRIVATE_KEY` | ✅ | Your operator private key (DER-encoded hex) |
+| `HEDERA_NETWORK` | — | `hedera-testnet` (default), `hedera-mainnet`, `hedera-previewnet` |
+| `SERVER_PORT` | — | HTTP port (default `8080`) |
 
-| Method | Path | Description |
-|--------|------|-------------|
-| `POST` | `/api/v1/topics` | Create a public topic |
-| `POST` | `/api/v1/topics/private` | Create a private topic (server generates submit key) |
-| `POST` | `/api/v1/topics/with-admin-key` | Create a public topic with a custom admin key |
-| `POST` | `/api/v1/topics/private/with-admin-key` | Create a private topic with a custom admin key |
-| `GET` | `/api/v1/topics/{topicId}` | Get topic info from mirror node |
-| `GET` | `/api/v1/topics/{topicId}/messages` | Get all messages for a topic |
-| `GET` | `/api/v1/topics/{topicId}/messages/{sequenceNumber}` | Get a specific message by sequence number |
-| `PUT` | `/api/v1/topics/{topicId}/memo` | Update topic memo |
-| `PUT` | `/api/v1/topics/{topicId}/admin-key` | Rotate topic admin key (server generates new key) |
-| `PUT` | `/api/v1/topics/{topicId}/submit-key` | Rotate topic submit key (server generates new key) |
-| `PUT` | `/api/v1/topics/{topicId}` | Atomic admin key + submit key + memo update |
-| `POST` | `/api/v1/topics/{topicId}/messages` | Submit a text message to a topic |
-| `POST` | `/api/v1/topics/{topicId}/messages/binary` | Submit a binary message (Base64-encoded) to a topic |
-| `DELETE` | `/api/v1/topics/{topicId}` | Delete a topic |
+## API coverage
 
-### Fungible Tokens — `/api/v1/tokens`
+The full interactive spec lives at `/swagger-ui/index.html`. The proxy covers:
 
-| Method | Path | Description |
-|--------|------|-------------|
-| `POST` | `/api/v1/tokens` | Create a fungible token |
-| `GET` | `/api/v1/tokens/{tokenId}` | Get detailed token info from mirror node |
-| `GET` | `/api/v1/tokens/{tokenId}/balances` | Get all account balances for a token from mirror node |
-| `GET` | `/api/v1/tokens/{tokenId}/balances/{accountId}` | Get token balance for an account from mirror node |
-| `GET` | `/api/v1/tokens/account/{accountId}` | Get all tokens associated with an account from mirror node |
-| `POST` | `/api/v1/tokens/associate` | Batch associate an account with multiple tokens |
-| `DELETE` | `/api/v1/tokens/associate` | Batch dissociate an account from multiple tokens |
-| `POST` | `/api/v1/tokens/{tokenId}/associate` | Associate an account with a token |
-| `DELETE` | `/api/v1/tokens/{tokenId}/associate` | Dissociate an account from a token |
-| `POST` | `/api/v1/tokens/{tokenId}/mint` | Mint new token units to the treasury |
-| `POST` | `/api/v1/tokens/{tokenId}/burn` | Burn token units from the treasury |
-| `POST` | `/api/v1/tokens/{tokenId}/transfer` | Transfer tokens from the operator to an account |
-| `POST` | `/api/v1/tokens/{tokenId}/transfer/{fromAccountId}` | Transfer tokens between user accounts |
+- **Accounts** — create, fund, transfer HBAR, rotate keys, query balance and info
+- **Fungible Tokens (HTS)** — create, mint, burn, transfer, associate/dissociate
+- **NFTs (HTS)** — create token type, mint, burn, transfer, query
+- **Topics (HCS)** — create public/private topics, submit and query messages
+- **Smart Contracts** — deploy and call contracts
+- **Files** — create, read, query size
+- **Network** — query network info and fee schedules
+- **Blocks & Transactions** — query by number or ID
 
-## Key Design Decisions
-
-**Server-side key generation** — key creation and rotation endpoints generate fresh ED25519 key pairs on the server and return them in the response. This is consistent across account creation, account key rotation, and topic key rotation. The caller must save the returned private key — it is only shown once.
-
-**Structured success responses** — mutation endpoints that have no data to return respond with a `SuccessResponse` containing a contextual message rather than an empty body.
-
-**Maven Central dependencies** — the `hiero-enterprise-java` library is consumed as a versioned Maven dependency (`org.hiero:hiero-enterprise-spring:0.20.0`). No Git submodules are required.
-
-## Project Structure
+## How it works
 
 ```
-hiero-enterprise-proxy/
-├── hiero-proxy-server/          # Spring Boot application
-│   └── src/main/java/org/hiero/proxy/server/
-│       ├── config/              # OpenAPI / Swagger UI configuration
-│       ├── controller/          # REST controllers (AccountController, TopicController)
-│       ├── dto/
-│       │   ├── request/         # Inbound HTTP request body records
-│       │   └── response/        # Outbound HTTP response records with from() factories
-│       └── exception/           # Global exception handler and ErrorResponse
-└── pom.xml                      # Root Maven POM
+Your app  →  HTTP/JSON  →  Hiero Enterprise Proxy  →  gRPC/HTTPS  →  Hiero Network
 ```
+
+The proxy is a thin translation layer. It accepts HTTP requests, delegates to the `hiero-enterprise-spring` client beans, and converts the result — or any exception — into a consistent JSON response. There is no database, no cache, and no business logic here.
+
+**Key behaviour to know:**
+
+- Key generation happens server-side. When you create an account or rotate a key, the proxy generates a fresh ED25519 key pair and returns the private key once in the response. Save it — it won't be shown again.
+- All errors follow the same shape: `{ "status": <http-code>, "message": "<reason>" }`.
+- The operator account (from your env) pays all transaction fees.
+
+## CI/CD
+
+Every push to `main` builds and publishes a multi-platform image (`linux/amd64` + `linux/arm64`) to:
+
+```
+ghcr.io/hiero-hackers/hiero-enterprise-proxy:latest
+```
+
+Versioned releases are tagged from semver git tags (`v1.2.3` → `:v1.2.3`, `:1.2`, `:1`).
+
+## Contributing
+
+Contributions are welcome. Please sign your commits (`git commit -s`) — the repo enforces DCO.
+
+Built on [`org.hiero:hiero-enterprise-spring:0.20.0`](https://central.sonatype.com/artifact/org.hiero/hiero-enterprise-spring) from Maven Central.
