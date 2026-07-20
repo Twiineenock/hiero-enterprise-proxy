@@ -71,7 +71,7 @@
 <section class="hero">
   <div class="badge"><span class="badge-dot"></span>Server running &middot; Hiero Enterprise Proxy</div>
   <h1>Hiero for every language</h1>
-  <p class="subtitle">A production-ready REST gateway to the Hiero network. Build with Python, JavaScript, Go, or any language &mdash; no Java SDK required.</p>
+  <p class="subtitle">A REST gateway to the Hiero network with official Python and TypeScript SDKs. Run one container, install a client library, and start building.</p>
   <div class="cta-group">
     <a class="btn btn-primary" href="/swagger-ui/index.html">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
@@ -96,38 +96,48 @@
   ghcr.io/hiero-hackers/hiero-enterprise-proxy:latest</pre>
   </div>
 
-  <p class="section-title">Call it from Python</p>
+  <p class="section-title">Install the Python SDK</p>
+  <div class="code-block">
+    <div class="code-header"><span>bash</span><button class="copy-btn" onclick="copy(this,'py-install')">copy</button></div>
+    <pre id="py-install"><span class="c-cmd">pip</span> install <span class="c-str">"hiero-enterprise-proxy @ git+https://github.com/hiero-hackers/hiero-enterprise-proxy.git#subdirectory=clients/python"</span></pre>
+  </div>
+
+  <p class="section-title">Use it from Python</p>
   <div class="code-block">
     <div class="code-header"><span>python</span><button class="copy-btn" onclick="copy(this,'py-cmd')">copy</button></div>
-    <pre id="py-cmd"><span class="c-key">import</span> requests
-BASE = <span class="c-str">"http://localhost:8080/api/v1"</span>
+    <pre id="py-cmd"><span class="c-key">from</span> hiero_proxy <span class="c-key">import</span> HieroProxyClient
+
+client = HieroProxyClient(base_url=<span class="c-str">"http://localhost:8080"</span>)
 
 <span class="c-comment"># Create an account funded with 10 HBAR</span>
-account = requests.post(f<span class="c-str">"{BASE}/accounts"</span>, json={<span class="c-str">"initialBalanceInHbar"</span>: 10}).json()
+account = client.accounts.create(initial_balance_in_hbar=10)
 print(account[<span class="c-str">"accountId"</span>])  <span class="c-comment"># 0.0.12345</span>
 
 <span class="c-comment"># Create a fungible token</span>
-token = requests.post(f<span class="c-str">"{BASE}/tokens"</span>, json={<span class="c-str">"name"</span>: <span class="c-str">"MyToken"</span>, <span class="c-str">"symbol"</span>: <span class="c-str">"MTK"</span>}).json()
-print(token[<span class="c-str">"tokenId"</span>])   <span class="c-comment"># 0.0.55001</span></pre>
+token = client.tokens.create(<span class="c-str">"MyToken"</span>, <span class="c-str">"MTK"</span>, 1_000_000)
+client.tokens.mint(token[<span class="c-str">"tokenId"</span>], 500)</pre>
   </div>
 
-  <p class="section-title">Call it from JavaScript</p>
+  <p class="section-title">Install the JavaScript SDK</p>
   <div class="code-block">
-    <div class="code-header"><span>javascript</span><button class="copy-btn" onclick="copy(this,'js-cmd')">copy</button></div>
-    <pre id="js-cmd"><span class="c-key">const</span> BASE = <span class="c-str">"http://localhost:8080/api/v1"</span>;
+    <div class="code-header"><span>bash</span><button class="copy-btn" onclick="copy(this,'js-install')">copy</button></div>
+    <pre id="js-install"><span class="c-cmd">npm</span> install git+https://github.com/hiero-hackers/hiero-enterprise-proxy.git#main:clients/javascript</pre>
+  </div>
+
+  <p class="section-title">Use it from JavaScript / TypeScript</p>
+  <div class="code-block">
+    <div class="code-header"><span>typescript</span><button class="copy-btn" onclick="copy(this,'js-cmd')">copy</button></div>
+    <pre id="js-cmd"><span class="c-key">import</span> { HieroProxyClient } <span class="c-key">from</span> <span class="c-str">"@hiero-hackers/proxy-sdk"</span>;
+
+<span class="c-key">const</span> client = <span class="c-key">new</span> HieroProxyClient({ baseUrl: <span class="c-str">"http://localhost:8080"</span> });
 
 <span class="c-comment">// Create a topic and publish a message</span>
-<span class="c-key">const</span> topic = <span class="c-key">await</span> fetch(`${BASE}/topics`, {
-  method: <span class="c-str">"POST"</span>,
-  headers: { <span class="c-str">"Content-Type"</span>: <span class="c-str">"application/json"</span> },
-  body: JSON.stringify({ memo: <span class="c-str">"my event bus"</span> })
-}).then(r => r.json());
+<span class="c-key">const</span> topic = <span class="c-key">await</span> client.topics.create(<span class="c-str">"my event bus"</span>);
+<span class="c-key">await</span> client.topics.submitMessage(topic.topicId, <span class="c-str">"Hello Hiero"</span>);
 
-<span class="c-key">await</span> fetch(`${BASE}/topics/${topic.topicId}/messages`, {
-  method: <span class="c-str">"POST"</span>,
-  headers: { <span class="c-str">"Content-Type"</span>: <span class="c-str">"application/json"</span> },
-  body: JSON.stringify({ message: <span class="c-str">"Hello Hiero"</span> })
-});</pre>
+<span class="c-comment">// Deploy a smart contract</span>
+<span class="c-key">const</span> contract = <span class="c-key">await</span> client.contracts.deploy(<span class="c-str">"0x608060..."</span>);
+console.log(contract.contractId);</pre>
   </div>
 </section>
 
@@ -140,7 +150,6 @@ print(token[<span class="c-str">"tokenId"</span>])   <span class="c-comment"># 0
     <div class="api-card"><span class="api-dot" style="background:#bc8cff"></span>NFTs (HTS)</div>
     <div class="api-card"><span class="api-dot" style="background:#ffa657"></span>Topics (HCS)</div>
     <div class="api-card"><span class="api-dot" style="background:#f78166"></span>Smart Contracts</div>
-    <div class="api-card"><span class="api-dot" style="background:#79c0ff"></span>Hooks</div>
     <div class="api-card"><span class="api-dot" style="background:#56d364"></span>Files</div>
     <div class="api-card"><span class="api-dot" style="background:#e3b341"></span>Blocks &amp; Transactions</div>
     <div class="api-card"><span class="api-dot" style="background:#8b949e"></span>Network Info</div>
@@ -152,11 +161,11 @@ print(token[<span class="c-str">"tokenId"</span>])   <span class="c-comment"># 0
   <p class="section-title">Why use this?</p>
   <div class="features">
     <div class="feature-card"><div class="feature-icon">🐳</div><h3>Docker-first</h3><p>One command to run. No Java, no Maven, no SDK setup required on your machine.</p></div>
-    <div class="feature-card"><div class="feature-icon">🌐</div><h3>Any language</h3><p>Python, JavaScript, Go, PHP, Ruby &mdash; if it can make an HTTP request, it can talk to Hiero.</p></div>
-    <div class="feature-card"><div class="feature-icon">📖</div><h3>Full OpenAPI spec</h3><p>Auto-generate a typed client in any language from the spec at <code style="font-size:.8rem;color:var(--accent)">/v3/api-docs</code>.</p></div>
-    <div class="feature-card"><div class="feature-icon">🔑</div><h3>Server-side keys</h3><p>Key generation and rotation happen on the server. You receive the key once &mdash; store it safely.</p></div>
-    <div class="feature-card"><div class="feature-icon">🛡️</div><h3>One operator account</h3><p>Configure once. All transaction fees flow through the operator &mdash; your clients stay clean.</p></div>
-    <div class="feature-card"><div class="feature-icon">⚡</div><h3>Structured errors</h3><p>All errors follow RFC 7807 &mdash; consistent, machine-readable, and easy to handle.</p></div>
+    <div class="feature-card"><div class="feature-icon">📦</div><h3>Official SDKs</h3><p>Type-safe client libraries for Python and TypeScript. Install from GitHub and start building.</p></div>
+    <div class="feature-card"><div class="feature-icon">📖</div><h3>Full OpenAPI spec</h3><p>Interactive API explorer at <code style="font-size:.8rem;color:var(--accent)">/swagger-ui</code>. Auto-generate clients in any language.</p></div>
+    <div class="feature-card"><div class="feature-icon">🔑</div><h3>Server-side keys</h3><p>Key generation and rotation happen on the server. You receive the key once — store it safely.</p></div>
+    <div class="feature-card"><div class="feature-icon">🛡️</div><h3>One operator account</h3><p>Configure once. All transaction fees flow through the operator — your clients stay clean.</p></div>
+    <div class="feature-card"><div class="feature-icon">⚡</div><h3>Structured errors</h3><p>All errors return consistent JSON with status codes — easy to handle in any language.</p></div>
   </div>
 </section>
 
