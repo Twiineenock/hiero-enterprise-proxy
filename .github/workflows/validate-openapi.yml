@@ -1,0 +1,75 @@
+name: Validate OpenAPI Spec
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'hiero-proxy-server/src/**'
+      - 'openapi/spec.yaml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'hiero-proxy-server/src/**'
+      - 'openapi/spec.yaml'
+
+jobs:
+  validate-spec:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate OpenAPI spec
+        uses: char0n/swagger-editor-validate@v1
+        with:
+          definition-file: openapi/spec.yaml
+
+      - name: Check for breaking changes
+        uses: oasdiff/oasdiff-action/breaking@main
+        with:
+          base: openapi/spec.yaml
+          revision: openapi/spec.yaml
+        # On PRs, compare base branch spec vs PR spec
+        if: github.event_name == 'pull_request'
+
+  verify-spec-freshness:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Cache Maven packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+          restore-keys: ${{ runner.os }}-maven-
+
+      - name: Start proxy
+        run: |
+          ./mvnw spring-boot:run -pl hiero-proxy-server &
+          echo "Waiting for proxy to start..."
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8080/v3/api-docs.yaml > /dev/null 2>&1; then
+              echo "Proxy is up."
+              break
+            fi
+            sleep 2
+          done
+
+      - name: Export live spec
+        run: curl -sf http://localhost:8080/v3/api-docs.yaml -o /tmp/live-spec.yaml
+
+      - name: Compare committed spec with live spec
+        run: |
+          if ! diff -q openapi/spec.yaml /tmp/live-spec.yaml > /dev/null 2>&1; then
+            echo "WARNING: The committed spec.yaml differs from the live proxy spec."
+            echo "Run ./openapi/export-spec.sh to update it."
+            diff openapi/spec.yaml /tmp/live-spec.yaml || true
+            exit 1
+          fi
+          echo "Spec is up to date."
