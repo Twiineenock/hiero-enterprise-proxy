@@ -40,7 +40,12 @@ docker run `
 ```bash
 git clone https://github.com/hiero-hackers/hiero-enterprise-proxy.git
 cd hiero-enterprise-proxy
-cp .env.example .env   # add your credentials
+
+# Create a .env file with your credentials
+echo "HEDERA_ACCOUNT_ID=0.0.xxxxx" > .env
+echo "HEDERA_PRIVATE_KEY=your_private_key" >> .env
+echo "HEDERA_NETWORK=hedera-testnet" >> .env
+
 docker compose up
 ```
 </details>
