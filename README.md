@@ -1,16 +1,15 @@
 # Hiero Enterprise Proxy
 
-A production-ready REST gateway to the [Hiero](https://hiero.org) distributed ledger network. It wraps the [hiero-enterprise-java](https://github.com/hiero-hackers/hiero-enterprise-java) SDK and exposes everything as a standard HTTP API — so you can build on Hiero from **any language**, without touching Java or the SDK.
+A REST gateway to the [Hiero](https://hiero.org) distributed ledger. Run one container, get a fully documented HTTP API, and build on Hiero from **any language** — no Java SDK required.
 
-## Why this exists
-
-The Hiero SDK is Java-first. If you're building in Python, JavaScript, Go, or anything else, you previously had no clean way to interact with the network. This proxy solves that: run one container, get a fully documented REST API, and start making HTTP requests.
+```
+Your app  →  HTTP/JSON  →  Hiero Enterprise Proxy  →  Hiero Network
+```
 
 ## Quickstart
 
-You need a funded [Hedera testnet account](https://portal.hedera.com) and Docker.
+You need a [Hedera testnet account](https://portal.hedera.com) and Docker.
 
-**Linux / macOS**
 ```bash
 docker run \
   -e HEDERA_ACCOUNT_ID=0.0.xxxxx \
@@ -20,7 +19,11 @@ docker run \
   ghcr.io/hiero-hackers/hiero-enterprise-proxy:latest
 ```
 
-**Windows (PowerShell)** — use backticks instead of backslashes for line continuation:
+Open `http://localhost:8080` — interactive API explorer at `/swagger-ui/index.html`.
+
+<details>
+<summary><strong>Windows PowerShell</strong></summary>
+
 ```powershell
 docker run `
   -e HEDERA_ACCOUNT_ID=0.0.xxxxx `
@@ -29,75 +32,94 @@ docker run `
   -p 8080:8080 `
   ghcr.io/hiero-hackers/hiero-enterprise-proxy:latest
 ```
+</details>
 
-Open `http://localhost:8080` — you'll find the landing page, interactive API explorer, and OpenAPI spec.
-
-## Running locally with Docker Compose
-
-This is the easiest approach on any OS — no line-continuation differences to worry about.
+<details>
+<summary><strong>Docker Compose (any OS)</strong></summary>
 
 ```bash
-# 1. Clone the repo
 git clone https://github.com/hiero-hackers/hiero-enterprise-proxy.git
 cd hiero-enterprise-proxy
-
-# 2. Create your .env file and add your Hedera credentials
-cp .env.example .env
-
-# 3. Start the container
+cp .env.example .env   # add your credentials
 docker compose up
 ```
+</details>
 
-The `.env` file should contain:
-```
-HEDERA_ACCOUNT_ID=0.0.xxxxx
-HEDERA_PRIVATE_KEY=your_private_key
-HEDERA_NETWORK=hedera-testnet
-```
+## Client SDKs
 
-## Running without Docker (Java 21 required)
+Official client libraries that wrap this proxy — install directly from GitHub:
 
-**Linux / macOS**
+### JavaScript / TypeScript
+
 ```bash
-./mvnw spring-boot:run -pl hiero-proxy-server
+npm install git+https://github.com/hiero-hackers/hiero-enterprise-proxy.git#main:clients/javascript
 ```
 
-**Windows (PowerShell)**
-```powershell
-.\mvnw.cmd spring-boot:run -pl hiero-proxy-server
+```typescript
+import { HieroProxyClient } from "@hiero-hackers/proxy-sdk";
+
+const client = new HieroProxyClient({ baseUrl: "http://localhost:8080" });
+
+const account = await client.accounts.create(10);
+console.log(account.accountId); // 0.0.12345
+
+const token = await client.tokens.create("MyToken", "MTK", 1_000_000);
+await client.tokens.mint(token.tokenId, 500);
 ```
+
+### Python
+
+```bash
+pip install "hiero-enterprise-proxy @ git+https://github.com/hiero-hackers/hiero-enterprise-proxy.git#subdirectory=clients/python"
+```
+
+```python
+from hiero_proxy import HieroProxyClient
+
+client = HieroProxyClient(base_url="http://localhost:8080")
+
+account = client.accounts.create(initial_balance_in_hbar=10)
+print(account["accountId"])  # 0.0.12345
+
+token = client.tokens.create("MyToken", "MTK", 1_000_000)
+client.tokens.mint(token["tokenId"], 500)
+```
+
+Both SDKs cover all proxy endpoints: accounts, tokens, NFTs, topics, contracts, files, blocks, and transactions.
+
+## API Coverage
+
+| Domain | What you can do |
+|--------|----------------|
+| **Accounts** | Create, fund, transfer HBAR, rotate keys, query balance |
+| **Fungible Tokens** | Create, mint, burn, transfer, associate/dissociate |
+| **NFTs** | Create type, mint, burn, transfer, query by owner |
+| **Topics** | Create public/private, submit messages, query history |
+| **Smart Contracts** | Deploy bytecode, call functions, query state |
+| **Files** | Create, read contents, update, delete |
+| **Blocks & Transactions** | Query by number, hash, or transaction ID |
+| **Network** | Exchange rates, fees, staking info, supply |
 
 ## Configuration
 
-All configuration is done through environment variables (or a `.env` file in the project root):
+| Variable | Required | Default |
+|----------|----------|---------|
+| `HEDERA_ACCOUNT_ID` | Yes | — |
+| `HEDERA_PRIVATE_KEY` | Yes | — |
+| `HEDERA_NETWORK` | No | `hedera-testnet` |
+| `SERVER_PORT` | No | `8080` |
 
-| Variable | Required | Description |
-|---|---|---|
-| `HEDERA_ACCOUNT_ID` | ✅ | Your operator account (e.g. `0.0.12345`) |
-| `HEDERA_PRIVATE_KEY` | ✅ | Your operator private key (DER-encoded hex) |
-| `HEDERA_NETWORK` | — | `hedera-testnet` (default), `hedera-mainnet`, `hedera-previewnet` |
-| `SERVER_PORT` | — | HTTP port (default `8080`) |
+## Development
 
-## API coverage
-
-The full interactive spec lives at `/swagger-ui/index.html`. The proxy covers:
-
-- **Accounts** — create, fund, transfer HBAR, rotate keys, query balance and info
-- **Fungible Tokens (HTS)** — create, mint, burn, transfer, associate/dissociate
-- **NFTs (HTS)** — create token type, mint, burn, transfer, query
-- **Topics (HCS)** — create public/private topics, submit and query messages
-- **Smart Contracts** — deploy and call contracts
-- **Files** — create, read, query size
-- **Network** — query network info and fee schedules
-- **Blocks & Transactions** — query by number or ID
-
-## How it works
-
-```
-Your app  →  HTTP/JSON  →  Hiero Enterprise Proxy  →  gRPC/HTTPS  →  Hiero Network
+```bash
+# Run without Docker (Java 21 required)
+./mvnw spring-boot:run -pl hiero-proxy-server    # Linux/macOS
+.\mvnw.cmd spring-boot:run -pl hiero-proxy-server  # Windows
 ```
 
-The proxy is a thin translation layer. It accepts HTTP requests, delegates to the `hiero-enterprise-spring` client beans, and converts the result — or any exception — into a consistent JSON response. There is no database, no cache, and no business logic here.
+## License
+
+Apache-2.0
 
 **Key behaviour to know:**
 
