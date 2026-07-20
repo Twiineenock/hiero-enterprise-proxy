@@ -10,6 +10,7 @@ The Hiero SDK is Java-first. If you're building in Python, JavaScript, Go, or an
 
 You need a funded [Hedera testnet account](https://portal.hedera.com) and Docker.
 
+**Linux / macOS**
 ```bash
 docker run \
   -e HEDERA_ACCOUNT_ID=0.0.xxxxx \
@@ -19,20 +20,51 @@ docker run \
   ghcr.io/hiero-hackers/hiero-enterprise-proxy:latest
 ```
 
+**Windows (PowerShell)** — use backticks instead of backslashes for line continuation:
+```powershell
+docker run `
+  -e HEDERA_ACCOUNT_ID=0.0.xxxxx `
+  -e HEDERA_PRIVATE_KEY=your_private_key `
+  -e HEDERA_NETWORK=hedera-testnet `
+  -p 8080:8080 `
+  ghcr.io/hiero-hackers/hiero-enterprise-proxy:latest
+```
+
 Open `http://localhost:8080` — you'll find the landing page, interactive API explorer, and OpenAPI spec.
 
-## Running locally with docker compose
+## Running locally with Docker Compose
+
+This is the easiest approach on any OS — no line-continuation differences to worry about.
 
 ```bash
-cp .env.example .env   # add your Hedera credentials
+# 1. Clone the repo
+git clone https://github.com/hiero-hackers/hiero-enterprise-proxy.git
+cd hiero-enterprise-proxy
+
+# 2. Create your .env file and add your Hedera credentials
+cp .env.example .env
+
+# 3. Start the container
 docker compose up
 ```
 
-Or build and run without Docker if you have Java 21:
+The `.env` file should contain:
+```
+HEDERA_ACCOUNT_ID=0.0.xxxxx
+HEDERA_PRIVATE_KEY=your_private_key
+HEDERA_NETWORK=hedera-testnet
+```
 
+## Running without Docker (Java 21 required)
+
+**Linux / macOS**
 ```bash
-./mvnw spring-boot:run -pl hiero-proxy-server   # Linux / macOS
-.\mvnw.cmd spring-boot:run -pl hiero-proxy-server  # Windows
+./mvnw spring-boot:run -pl hiero-proxy-server
+```
+
+**Windows (PowerShell)**
+```powershell
+.\mvnw.cmd spring-boot:run -pl hiero-proxy-server
 ```
 
 ## Configuration
